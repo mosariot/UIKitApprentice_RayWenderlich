@@ -20,8 +20,8 @@ class SearchViewController: UIViewController {
     //MARK: - Properties
     
     private let search = Search()
-    
     var landscapeVC: LandscapeViewController?
+    weak var splitViewDetail: DetailViewController?
     
     //MARK: - Outlets
     
@@ -32,6 +32,8 @@ class SearchViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        title = NSLocalizedString("Search", comment: "Split View primary button")
+        
         tableView.contentInset = UIEdgeInsets(top: 94, left: 0, bottom: 0, right: 0)
         
         var cellNib = UINib(nibName: TableView.CellIdentifiers.searchResultCell, bundle: nil)
@@ -41,9 +43,19 @@ class SearchViewController: UIViewController {
         cellNib = UINib(nibName: TableView.CellIdentifiers.loadingCell, bundle: nil)
         tableView.register(cellNib, forCellReuseIdentifier: TableView.CellIdentifiers.loadingCell)
         
-        searchBar.becomeFirstResponder()
+        if UIDevice.current.userInterfaceIdiom != .pad {
+            searchBar.becomeFirstResponder()
+        }
         
         NotificationCenter.default.addObserver(self, selector: #selector(contentSizeDidChange), name: UIContentSizeCategory.didChangeNotification, object: nil)
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            navigationController?.navigationBar.isHidden = true
+        }
     }
     
     override func willTransition(to newCollection: UITraitCollection, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -51,7 +63,9 @@ class SearchViewController: UIViewController {
         
         switch newCollection.verticalSizeClass {
         case .compact:
-            showLandscape(with: coordinator)
+            if newCollection.horizontalSizeClass == .compact {
+                showLandscape(with: coordinator)
+            }
         case .regular, .unspecified:
             hideLandscape(with: coordinator)
         @unknown default:
@@ -63,8 +77,8 @@ class SearchViewController: UIViewController {
     
     func showNetworkError() {
         let alert = UIAlertController(
-            title: "Whoops...",
-            message: "There was an error accessing the iTunes Store. Please try again.",
+            title: NSLocalizedString("Whoops...", comment: "Localized kind: Whoops..."),
+            message: NSLocalizedString("There was an error accessing the iTunes Store. Please try again.", comment: "Localized kind: There was an error accessing the iTunes Store. Please try again."),
             preferredStyle: .alert)
         let action = UIAlertAction(title: "OK", style: .default, handler: nil)
         alert.addAction(action)
@@ -115,6 +129,14 @@ class SearchViewController: UIViewController {
         }
     }
     
+    private func hidePrimaryPane() {
+        UIView.animate(withDuration: 0.25) {
+            self.splitViewController!.preferredDisplayMode = .secondaryOnly
+        } completion: { _ in
+            self.splitViewController!.preferredDisplayMode = .automatic
+        }
+    }
+    
     // MARK: - Actions
     
     @IBAction func segmentChanged(_ sender: UISegmentedControl) {
@@ -130,6 +152,7 @@ class SearchViewController: UIViewController {
                 let indexPath = sender as! IndexPath
                 let searchResult = list[indexPath.row]
                 detailViewController.searchResult = searchResult
+                detailViewController.isPopUp = true
             }
         }
     }
@@ -194,8 +217,19 @@ extension SearchViewController: UITableViewDelegate, UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        performSegue(withIdentifier: "ShowDetail", sender: indexPath)
+        searchBar.resignFirstResponder()
+        
+        if view.window!.rootViewController!.traitCollection.horizontalSizeClass == .compact {
+            tableView.deselectRow(at: indexPath, animated: true)
+            performSegue(withIdentifier: "ShowDetail", sender: indexPath)
+        } else {
+            if case .results(let list) = search.state {
+                splitViewDetail?.searchResult = list[indexPath.row]
+            }
+            if splitViewController!.displayMode != .oneBesideSecondary {
+                hidePrimaryPane()
+            }
+        }
     }
     
     func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
